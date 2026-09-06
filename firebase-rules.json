@@ -1,0 +1,19 @@
+{
+  "rules": {
+    "rounds": {
+      ".read": true,
+      "$key": {
+        ".write": "newData.isNumber() && newData.val() > 0 && newData.val() < 100000"
+      }
+    },
+    "leaderboard": {
+      "$tier": {
+        ".read": true,
+        ".indexOn": "karat",
+        "$entry": {
+          ".write": "!data.exists() && newData.hasChildren(['nickname','karat','timeSec','area','ts']) && newData.child('nickname').isString() && newData.child('nickname').val().length > 0 && newData.child('nickname').val().length <= 20 && newData.child('karat').isNumber() && newData.child('karat').val() >= 0 && newData.child('karat').val() < 100000 && newData.child('timeSec').isNumber() && newData.child('timeSec').val() >= 60 && newData.child('area').isString() && newData.child('area').val().length <= 60"
+        }
+      }
+    }
+  }
+}
