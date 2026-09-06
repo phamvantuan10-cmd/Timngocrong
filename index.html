@@ -4,6 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Ngọc Rồng — Săn đá quý GPS</title>
+
+<!-- Icon & "Thêm vào màn hình chính" -->
+<link rel="icon" type="image/png" href="icon-512.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0A2C2D">
+
+<!-- Ảnh/tiêu đề xem trước khi dán link vào Messenger/Zalo/Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Ngọc Rồng — Săn đá quý bằng GPS ngoài đời thật">
+<meta property="og:description" content="Chạm 1 lần để xác định phường/xã, tự động rải 99 vị trí — đi tìm và điểm danh thật ngoài đời để săn Thạch Anh, Ngọc Lục Bảo, Kim Cương.">
+<meta property="og:image" content="social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Ngọc Rồng — Săn đá quý bằng GPS ngoài đời thật">
+<meta name="twitter:description" content="Chạm 1 lần để xác định phường/xã, tự động rải 99 vị trí — đi tìm và điểm danh thật ngoài đời để săn Thạch Anh, Ngọc Lục Bảo, Kim Cương.">
+<meta name="twitter:image" content="social-preview.png">
+
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -248,14 +265,6 @@
       <button class="btn btn-ghost" id="startDemoBtn" disabled>Bắt đầu — mô phỏng (không GPS)</button>
       <button class="btn-outline-small" id="presetBtn">+ Bộ 6 địa danh mẫu (test nhanh)</button>
     </div>
-    <button class="btn-outline-small" id="toggleDebugBtn" style="width:100%; opacity:0.6; display:none;">🧪 Công cụ thử nghiệm (ẩn đi khi phát hành thật)</button>
-    <div id="debugPanel" style="display:none; flex-direction:column; gap:8px;">
-      <div class="hint-text" id="debugGpsInfo">GPS: chưa có dữ liệu</div>
-      <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink);">
-        <input type="checkbox" id="debugSkipRadiusChk"> Bỏ qua khoảng cách (test nhanh)
-      </label>
-      <button class="btn-outline-small" id="debugResetBtn">🗑️ Xoá dữ liệu thử nghiệm trên máy này</button>
-    </div>
   </div>
 </div>
 
@@ -445,7 +454,7 @@
         return snap.exists() ? parseInt(snap.val(), 10) || 1 : 1;
       }catch(e){ /* rơi xuống local nếu mất mạng */ }
     }
-    try{ return parseInt(localStorage.getItem('sandau_round__' + key), 10) || 1; }catch(e){ return 1; }
+    try{ return parseInt(localStorage.getItem('ngocrong_round__' + key), 10) || 1; }catch(e){ return 1; }
   }
 
   async function advanceRound(difficultyKey, areaLabel, completedRound){
@@ -462,7 +471,7 @@
         return;
       }catch(e){ /* rơi xuống local nếu mất mạng */ }
     }
-    try{ localStorage.setItem('sandau_round__' + key, String(nextRound)); }catch(e){}
+    try{ localStorage.setItem('ngocrong_round__' + key, String(nextRound)); }catch(e){}
   }
 
   document.querySelectorAll('#diffRow .diff-btn').forEach(btn => {
@@ -615,31 +624,6 @@
       renderLeaderboard();
     });
   });
-
-  // ================= CÔNG CỤ THỬ NGHIỆM (chỉ để test trước khi phát hành, nên ẩn/bỏ đi
-  // khi đưa cho người chơi thật) =================
-  let debugSkipRadius = false;
-  document.getElementById('toggleDebugBtn').addEventListener('click', () => {
-    const panel = document.getElementById('debugPanel');
-    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
-  });
-  document.getElementById('debugSkipRadiusChk').addEventListener('change', (e) => {
-    debugSkipRadius = e.target.checked;
-  });
-  document.getElementById('debugResetBtn').addEventListener('click', () => {
-    try{
-      Object.keys(localStorage)
-        .filter(k => k.startsWith('ngocrong_') || k.startsWith('sandau_round__'))
-        .forEach(k => localStorage.removeItem(k));
-    }catch(e){}
-    showToast('Đã xoá dữ liệu thử nghiệm trên máy này — tải lại trang để bắt đầu như người chơi mới.', 3600);
-  });
-  function updateDebugGpsInfo(){
-    const el = document.getElementById('debugGpsInfo');
-    if (!el) return;
-    if (!state.myPos){ el.textContent = 'GPS: chưa có dữ liệu'; return; }
-    el.textContent = `GPS: ${state.myPos.lat.toFixed(6)}, ${state.myPos.lng.toFixed(6)} — sai số ±${Math.round(state.myPos.accuracy || 0)}m`;
-  }
 
   // ================= CHIA SẺ KẾT QUẢ =================
   let lastResult = null; // { areaLabel, tier, karat, gemUnits, unitName, gemIcon, timeSec }
@@ -1278,8 +1262,8 @@
     const pct = Math.max(0, Math.min(100, 100 - (d/FAR_CAP_M)*100));
     bar.style.width = `${pct}%`; distEl.textContent = `Còn ${fmtDist(d)}`;
     miniDist.textContent = fmtDist(d);
-    const ready = debugSkipRadius || d <= loc.radius;
-    if (ready){ feel.textContent = debugSkipRadius ? 'Trong phạm vi! (test: bỏ qua khoảng cách)' : 'Trong phạm vi!'; btn.textContent='Điểm danh ngay'; btn.classList.add('ready'); btn.disabled=false; miniIcon.textContent='🎯'; }
+    const ready = d <= loc.radius;
+    if (ready){ feel.textContent='Trong phạm vi!'; btn.textContent='Điểm danh ngay'; btn.classList.add('ready'); btn.disabled=false; miniIcon.textContent='🎯'; }
     else if (d < loc.radius*3){ feel.textContent='Rất gần rồi 🔥'; btn.textContent='Đến gần hơn để điểm danh'; btn.classList.remove('ready'); btn.disabled=true; miniIcon.textContent='🔥'; }
     else if (d < loc.radius*10){ feel.textContent='Đang ấm dần lên'; btn.textContent='Đến gần hơn để điểm danh'; btn.classList.remove('ready'); btn.disabled=true; miniIcon.textContent='📍'; }
     else { feel.textContent='Còn khá xa'; btn.textContent='Đến gần hơn để điểm danh'; btn.classList.remove('ready'); btn.disabled=true; miniIcon.textContent='📍'; }
@@ -1288,7 +1272,7 @@
   function attemptCheckIn(){
     const idx = state.selected; if (idx==null || state.checked.has(idx)) return;
     const loc = LOCATIONS[idx], d = distanceTo(loc);
-    if (!debugSkipRadius && (d==null || d>loc.radius)) return;
+    if (d==null || d>loc.radius) return;
     checkIn(idx);
   }
 
@@ -1398,7 +1382,6 @@
     document.getElementById('gpsLabel').textContent = 'GPS đang hoạt động';
     ensureMeMarker([state.myPos.lat, state.myPos.lng]);
     startTimerIfNeeded(); updateAllDistances();
-    updateDebugGpsInfo();
     if (state.selected==null){ const b=bestUnchecked(); if (b!=null) openTarget(b); }
   }
   function isSecureForGPS(){
@@ -1436,7 +1419,6 @@
     state.myPos = { lat: e.latlng.lat, lng: e.latlng.lng, accuracy: 5 };
     ensureMeMarker(e.latlng);
     startTimerIfNeeded(); updateAllDistances();
-    updateDebugGpsInfo();
     if (state.selected==null){ const b=bestUnchecked(); if (b!=null) openTarget(b); }
   }
 
