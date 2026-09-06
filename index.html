@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ngọc Rồng — Săn đá quý GPS</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B2A2E;
+    --sea:#0F3D3E;
+    --sea-deep:#0A2C2D;
+    --paper:#F1ECDD;
+    --paper-dim:#E4DCC5;
+    --brass:#B8862E;
+    --brass-light:#D9AE5C;
+    --stamp:#9B3B33;
+    --stamp-dark:#7A2C26;
+    --good:#3E6E5E;
+    --cold:#2C6B8F;
+  }
+  *{box-sizing:border-box;}
+  html,body{ margin:0; padding:0; height:100%; width:100%; font-family:'Inter',sans-serif; background:var(--sea-deep); color:var(--ink); overflow:hidden; }
+  #map{ position:absolute; inset:0; z-index:0; filter: saturate(0.85) sepia(0.08); }
+
+  /* ---------- Top bar ---------- */
+  .topbar{ position:absolute; top:0; left:0; right:0; z-index:500; display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:8px 10px; padding:14px 16px; background:linear-gradient(180deg, rgba(10,44,45,0.92) 0%, rgba(10,44,45,0.55) 70%, rgba(10,44,45,0) 100%); pointer-events:none; }
+  .topbar > *{pointer-events:auto;}
+  .brand{ display:flex; flex-direction:column; color:var(--paper); min-width:0; flex-shrink:1; }
+  .brand .mark{ font-family:'Fraunces',serif; font-weight:700; font-size:19px; }
+  .brand .sub{ font-size:10.5px; color:var(--brass-light); font-weight:600; letter-spacing:0.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; }
+  .stats{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; flex-shrink:0; }
+  .pill{ background:rgba(241,236,221,0.95); border:1px solid rgba(184,134,46,0.35); border-radius:8px; padding:6px 11px; font-size:12.5px; font-weight:600; color:var(--sea-deep); display:flex; align-items:center; gap:5px; box-shadow:0 2px 6px rgba(0,0,0,0.25); font-variant-numeric: tabular-nums; white-space:nowrap; }
+  .pill .n{color:var(--stamp); font-family:'Fraunces',serif; font-weight:700;}
+  .gps-badge{ display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:var(--paper); background:rgba(0,0,0,0.25); padding:5px 9px; border-radius:7px; cursor:pointer; }
+  .gps-dot{ width:7px; height:7px; border-radius:50%; background:#e0623f; }
+  .gps-dot.live{ background:#5FCB8D; animation:pulseDot 1.6s infinite; }
+  @keyframes pulseDot{ 0%{ box-shadow:0 0 0 0 rgba(95,203,141,0.5); } 70%{ box-shadow:0 0 0 6px rgba(95,203,141,0); } 100%{ box-shadow:0 0 0 0 rgba(95,203,141,0); } }
+
+  /* ---------- Markers ---------- */
+  .pin{ width:32px; height:32px; position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .pin svg{ width:32px; height:32px; display:block; }
+  .pin.unchecked svg .body{ fill:var(--stamp); stroke:var(--paper); stroke-width:1.5; }
+  .pin.unchecked.near svg .body{ fill:var(--brass); }
+  .pin.unchecked{ animation: bob 1.8s ease-in-out infinite; }
+  @keyframes bob{ 0%,100%{ transform: translateY(-2px); } 50%{ transform: translateY(-8px); } }
+  .pin.checked svg .body{ fill:var(--good); }
+  .pin.checked{ animation:none; }
+  .pin.setup svg .body{ fill:var(--sea); stroke:var(--paper); stroke-width:1.5; }
+  .pin .num{ position:absolute; top:5px; left:0; right:0; text-align:center; font-size:11px; font-weight:700; color:var(--paper); pointer-events:none; }
+  .stamp-pop{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+  .stamp-pop svg{ width:58px; height:58px; opacity:0; }
+  .stamp-pop.play svg{ animation: stampIn 0.5s cubic-bezier(.2,1.4,.4,1) forwards; }
+  @keyframes stampIn{ 0%{ opacity:0; transform:scale(2.2) rotate(-18deg); } 60%{ opacity:1; transform:scale(0.92) rotate(-8deg); } 100%{ opacity:1; transform:scale(1) rotate(-8deg); } }
+  .me-dot{ width:18px; height:18px; border-radius:50%; background:var(--cold); border:3px solid var(--paper); animation: mePulse 2s infinite; }
+  @keyframes mePulse{ 0%{ box-shadow:0 0 0 0 rgba(44,107,143,0.5); } 70%{ box-shadow:0 0 0 14px rgba(44,107,143,0); } 100%{ box-shadow:0 0 0 0 rgba(44,107,143,0); } }
+
+  /* ---------- Target card ---------- */
+  .target-card{ position:absolute; right:10px; left:auto; transform:none; width:min(52%, 178px); z-index:600; top:150px; background:var(--paper); border-radius:11px; box-shadow:0 6px 16px rgba(0,0,0,0.3); border:1px solid rgba(184,134,46,0.4); padding:8px 9px 8px; display:none; }
+  .target-card.show{ display:block; }
+  .target-card.minimized{ width:auto; padding:0; border-radius:50%; background:transparent; border:none; box-shadow:none; }
+  .target-card.minimized .tc-body{ display:none; }
+  .target-card.minimized .tc-mini{ display:flex; }
+  .tc-mini{ display:none; width:46px; height:46px; border-radius:50%; background:var(--paper); border:1.5px solid rgba(184,134,46,0.5); box-shadow:0 4px 12px rgba(0,0,0,0.3); align-items:center; justify-content:center; flex-direction:column; cursor:pointer; }
+  .tc-mini .mini-dist{ font-size:9px; font-weight:700; color:var(--stamp); line-height:1.1; }
+  .tc-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }
+  .tc-name{ font-family:'Fraunces',serif; font-weight:700; font-size:11.5px; color:var(--sea-deep); line-height:1.2; }
+  .tc-city{ font-size:9px; color:rgba(27,42,46,0.55); margin-top:0px; }
+  .tc-topbtns{ display:flex; gap:2px; flex-shrink:0; }
+  .tc-close, .tc-min{ background:none; border:none; font-size:11px; color:rgba(27,42,46,0.4); cursor:pointer; padding:0 3px; line-height:1.4; }
+  .tc-bar-wrap{ margin-top:5px; height:4px; border-radius:3px; background:rgba(27,42,46,0.1); overflow:hidden; }
+  .tc-bar{ height:100%; width:0%; background:linear-gradient(90deg, var(--cold), var(--brass), var(--stamp)); transition:width 0.4s ease; border-radius:3px; }
+  .tc-status{ display:flex; flex-direction:column; gap:1px; margin-top:4px; }
+  .tc-dist{ font-size:9.5px; font-weight:600; color:var(--ink); }
+  .tc-feel{ font-size:9px; font-weight:600; color:var(--stamp); }
+  .tc-btn{ margin-top:6px; width:100%; background:rgba(27,42,46,0.15); color:rgba(27,42,46,0.45); border:none; padding:6px; border-radius:7px; font-weight:700; font-size:10px; cursor:not-allowed; font-family:'Inter',sans-serif; transition:all 0.25s ease; }
+  .tc-btn.ready{ background:var(--stamp); color:var(--paper); cursor:pointer; box-shadow:0 4px 14px rgba(155,59,51,0.4); }
+  .tc-btn.ready:active{ background:var(--stamp-dark); }
+
+  /* ---------- Sheet (shared shell for setup + game) ---------- */
+  .sheet{ position:absolute; left:0; right:0; bottom:0; z-index:500; background:var(--paper); border-top:1px solid rgba(184,134,46,0.4); border-radius:16px 16px 0 0; box-shadow:0 -6px 24px rgba(0,0,0,0.35); max-height:46%; display:flex; flex-direction:column; transition:max-height 0.3s ease; }
+  .sheet.collapsed{ max-height:60px; }
+  .sheet-handle{ display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; flex-shrink:0; position:relative; }
+  .sheet-handle .grip{ width:36px; height:4px; border-radius:2px; background:rgba(27,42,46,0.25); position:absolute; left:50%; top:8px; transform:translateX(-50%); }
+  .sheet-title{ font-family:'Fraunces',serif; font-weight:600; font-size:14.5px; color:var(--sea-deep); margin-top:6px; }
+  .sheet-toggle{ font-size:11.5px; font-weight:600; color:var(--stamp); margin-top:6px; }
+  .sheet-body{ overflow-y:auto; padding:0 14px 16px; display:flex; flex-direction:column; gap:7px; }
+  #checklist{ max-height:150px; gap:7px; }
+
+  /* ---------- Setup form ---------- */
+  .field-label{ font-size:11.5px; font-weight:700; color:rgba(27,42,46,0.55); letter-spacing:0.2px; margin-bottom:5px; }
+  select.select-area{ width:100%; padding:10px 12px; border-radius:9px; border:1px solid rgba(27,42,46,0.18); background:var(--paper-dim); font-size:13.5px; font-family:'Inter',sans-serif; color:var(--ink); }
+  .diff-row{ display:flex; gap:6px; }
+  .diff-btn{ flex:1; background:var(--paper-dim); border:1.5px solid rgba(27,42,46,0.14); border-radius:9px; padding:8px 4px; text-align:center; cursor:pointer; font-family:'Inter',sans-serif; }
+  .diff-btn .d-title{ display:block; font-size:12.5px; font-weight:700; color:var(--ink); }
+  .diff-btn .d-sub{ display:block; font-size:9.5px; color:rgba(27,42,46,0.55); margin-top:1px; }
+  .diff-btn .d-pts{ display:block; font-size:9.5px; color:var(--stamp); font-weight:700; margin-top:2px; }
+  .diff-btn.active{ background:var(--sea); border-color:var(--sea); }
+  .diff-btn.active .d-title{ color:var(--paper); }
+  .diff-btn.active .d-sub{ color:rgba(241,236,221,0.7); }
+  .diff-btn.active .d-pts{ color:var(--brass-light); }
+  .search-row{ display:flex; gap:8px; }
+  .search-row input{ flex:1; padding:10px 12px; border-radius:9px; border:1px solid rgba(27,42,46,0.18); background:var(--paper-dim); font-size:13.5px; font-family:'Inter',sans-serif; }
+  .search-row button{ background:var(--sea); color:var(--paper); border:none; border-radius:9px; padding:0 14px; font-weight:600; font-size:13px; cursor:pointer; }
+  .search-results{ display:flex; flex-direction:column; gap:6px; }
+  .search-result{ background:var(--paper-dim); border:1px solid rgba(27,42,46,0.1); border-radius:9px; padding:9px 11px; font-size:12.5px; cursor:pointer; display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .search-result .add-tag{ font-size:11px; font-weight:700; color:var(--stamp); flex-shrink:0; }
+  .hint-text{ font-size:11.5px; color:rgba(27,42,46,0.55); line-height:1.5; background:rgba(184,134,46,0.12); border-radius:8px; padding:8px 10px; }
+
+  .point-row{ display:flex; align-items:center; gap:8px; background:var(--paper-dim); border:1px solid rgba(27,42,46,0.1); border-radius:9px; padding:8px 9px; }
+  .point-row .badge{ width:22px; height:22px; border-radius:50%; flex-shrink:0; background:var(--sea); color:var(--paper); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; }
+  .point-row input.name-in{ flex:1; min-width:0; border:none; background:transparent; font-size:13px; font-weight:600; color:var(--ink); padding:2px 0; }
+  .point-row input.radius-in{ width:52px; border:1px solid rgba(27,42,46,0.15); border-radius:6px; font-size:11.5px; padding:4px 5px; text-align:center; }
+  .point-row .unit{ font-size:10.5px; color:rgba(27,42,46,0.5); }
+  .point-row .rm{ background:none; border:none; color:var(--stamp); font-size:15px; cursor:pointer; padding:2px 5px; flex-shrink:0; }
+  .empty-note{ font-size:12.5px; color:rgba(27,42,46,0.5); text-align:center; padding:10px 0; }
+
+  .setup-actions{ display:flex; flex-direction:column; gap:8px; margin-top:2px; }
+  .btn{ background:var(--stamp); color:var(--paper); border:none; padding:12px 20px; border-radius:9px; font-weight:600; font-size:14px; cursor:pointer; font-family:'Inter',sans-serif; width:100%; }
+  .btn:active{ background:var(--stamp-dark); }
+  .btn:disabled{ background:rgba(27,42,46,0.18); color:rgba(27,42,46,0.45); cursor:not-allowed; }
+  .btn-ghost{ background:transparent; color:var(--sea-deep); border:1.5px solid rgba(27,42,46,0.25); }
+  .btn-ghost:active{ background:rgba(27,42,46,0.06); }
+  .btn-outline-small{ background:rgba(15,61,62,0.08); color:var(--sea); border:none; padding:9px 12px; border-radius:8px; font-weight:600; font-size:12.5px; cursor:pointer; }
+
+  /* ---------- Checklist (game mode) ---------- */
+  .item{ display:flex; align-items:center; gap:8px; background:var(--paper-dim); border:1px solid rgba(27,42,46,0.08); border-radius:9px; padding:6px 10px; cursor:pointer; }
+  .item.done{ background:rgba(62,110,94,0.14); border-color:rgba(62,110,94,0.3); }
+  .item.near:not(.done){ border-color:rgba(184,134,46,0.6); }
+  .item .badge{ width:21px; height:21px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; background:var(--stamp); color:var(--paper); font-size:11px; font-weight:700; font-family:'Fraunces',serif; }
+  .item.done .badge{ background:var(--good); }
+  .item .info{ display:flex; flex-direction:column; min-width:0; flex:1; }
+  .item .name{ font-size:12px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item .hint{ font-size:10px; color:rgba(27,42,46,0.55); }
+  .item .dist{ font-size:11px; font-weight:700; color:var(--stamp); flex-shrink:0; }
+  .item.done .dist{ color:var(--good); }
+
+  /* ---------- Win / intro overlays ---------- */
+  .win-overlay{ position:absolute; inset:0; z-index:950; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(10,44,45,0.72); }
+  .win-overlay.show{ display:flex; }
+  .win-card{ background:var(--paper); border-radius:16px; padding:26px 22px; max-width:340px; width:100%; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,0.4); border:1px solid rgba(184,134,46,0.4); max-height:88vh; overflow-y:auto; }
+  .win-card .stamp-big{ width:74px; height:74px; margin:0 auto 12px; }
+  .win-card h2{ font-family:'Fraunces',serif; font-size:21px; margin:0 0 6px; color:var(--sea-deep); }
+  .win-card p{ font-size:13.5px; color:rgba(27,42,46,0.7); margin:0 0 18px; line-height:1.5; }
+  .win-card .time{ font-family:'Fraunces',serif; color:var(--stamp); font-weight:700; }
+
+  .toast{ position:absolute; left:50%; top:80px; transform:translateX(-50%) translateY(-10px); z-index:1000; background:var(--sea-deep); color:var(--paper); padding:10px 16px; border-radius:9px; font-size:13px; font-weight:600; box-shadow:0 6px 20px rgba(0,0,0,0.35); opacity:0; pointer-events:none; transition:all 0.3s ease; max-width:80%; text-align:center; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .crosshair{ position:absolute; top:50%; left:50%; width:0; height:0; z-index:490; display:none; pointer-events:none; }
+  .crosshair.show{ display:block; }
+  .crosshair::before, .crosshair::after{ content:""; position:absolute; background:var(--stamp); }
+  .crosshair::before{ width:2px; height:22px; left:-1px; top:-11px; }
+  .crosshair::after{ width:22px; height:2px; left:-11px; top:-1px; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div class="crosshair" id="crosshair"></div>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="mark">Ngọc Rồng</span>
+    <span class="sub" id="topSub">THIẾT LẬP KHU VỰC CHƠI</span>
+  </div>
+  <div class="stats" id="gameStats" style="display:none;">
+    <div class="gps-badge" id="gpsBadge"><span class="gps-dot" id="gpsDot"></span><span id="gpsLabel">Đang chờ GPS</span></div>
+    <div class="pill">⏱ <span class="n" id="timerDisplay">00:00</span></div>
+    <div class="pill">📍 <span class="n" id="progressDisplay">0/0</span></div>
+    <div class="pill">💎 <span class="n" id="scoreDisplay">0 kara</span></div>
+  </div>
+</div>
+
+<div class="target-card" id="targetCard">
+  <div class="tc-mini" id="tcMini">
+    <div id="tcMiniIcon">📍</div>
+    <div class="mini-dist" id="tcMiniDist">—</div>
+  </div>
+  <div class="tc-body">
+    <div class="tc-top">
+      <div><div class="tc-name" id="tcName">—</div><div class="tc-city" id="tcCity">—</div></div>
+      <div class="tc-topbtns">
+        <button class="tc-min" id="tcMin" title="Thu gọn">▁</button>
+        <button class="tc-close" id="tcClose">✕</button>
+      </div>
+    </div>
+    <div class="tc-bar-wrap"><div class="tc-bar" id="tcBar"></div></div>
+    <div class="tc-status"><div class="tc-dist" id="tcDist">— m</div><div class="tc-feel" id="tcFeel">Chưa có GPS</div></div>
+    <button class="tc-btn" id="tcBtn">Đến gần hơn để điểm danh</button>
+  </div>
+</div>
+
+<!-- ===================== SETUP SHEET ===================== -->
+<div class="sheet" id="setupSheet">
+  <div class="sheet-handle" id="setupHandle">
+    <div class="grip"></div>
+    <div class="sheet-title">Chọn khu vực &amp; đặt điểm điểm danh</div>
+    <div class="sheet-toggle" id="setupToggle">Thu gọn</div>
+  </div>
+  <div class="sheet-body">
+    <button class="btn-outline-small" id="playerBarBtn" style="width:100%; display:flex; justify-content:space-between; align-items:center;">
+      <span>👤 <span id="playerNameDisplay">Chưa đặt tên</span></span>
+      <span style="opacity:0.6;">Hồ sơ ›</span>
+    </button>
+    <div>
+      <div class="field-label">Cấp độ</div>
+      <div class="diff-row" id="diffRow">
+        <button class="diff-btn active" data-diff="ward">
+          <span class="d-title">🪨 Thạch Anh</span><span class="d-sub">1 phường/xã</span><span class="d-pts">1000 ➜ 1 kara</span>
+        </button>
+        <button class="diff-btn" data-diff="province">
+          <span class="d-title">💚 Ngọc Lục Bảo</span><span class="d-sub">1 tỉnh/thành</span><span class="d-pts">100 ➜ 1 kara</span>
+        </button>
+        <button class="diff-btn" data-diff="country">
+          <span class="d-title">💎 Kim Cương</span><span class="d-sub">Toàn quốc</span><span class="d-pts">10 ➜ 1 kara</span>
+        </button>
+      </div>
+    </div>
+    <div id="provinceBlock">
+      <select class="select-area" id="provinceSelect"></select>
+    </div>
+    <div id="searchBlock">
+      <div class="search-row">
+        <input type="text" id="searchInput" placeholder="Tìm xã, phường, địa danh...">
+        <button id="searchBtn">Tìm</button>
+      </div>
+      <div class="search-results" id="searchResults"></div>
+    </div>
+    <div id="wardAutoBlock" style="display:none;">
+      <div class="hint-text" id="wardAutoBox">Đang chờ bạn đồng ý chia sẻ vị trí…</div>
+      <button class="btn-outline-small" id="wardRetryBtn" style="width:100%; margin-top:8px;">🔄 Dò lại vị trí</button>
+    </div>
+    <div class="hint-text" id="tapHint" style="display:none;"></div>
+    <button class="btn-outline-small" id="genAreaBtn" style="display:none; width:100%;">🎲 Rải 99 vị trí</button>
+    <div id="roundInfoBox" class="hint-text" style="display:none;"></div>
+    <div id="insecureWarning" class="hint-text" style="display:none; background:rgba(155,59,51,0.14); color:var(--stamp-dark); font-weight:600;">⚠ Trang đang mở từ file (không phải https) nên GPS thật sẽ không hoạt động. Hãy dùng chế độ mô phỏng, hoặc tải file lên một trang lưu trữ https rồi mở lại.</div>
+    <div id="inAppBrowserWarning" class="hint-text" style="display:none; background:rgba(155,59,51,0.14); color:var(--stamp-dark); font-weight:600;">⚠ Bạn đang mở link trong trình duyệt của Messenger/Zalo/Facebook — các trình duyệt này thường chặn GPS. Bấm nút "···" ở góc màn hình → chọn "Mở bằng Chrome/Safari" để GPS hoạt động đúng.</div>
+    <button class="btn-outline-small" id="openPointsBtn" style="width:100%;">📋 Danh sách điểm (<span id="pointCountInline">0</span>)</button>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-outline-small" id="openBadgesBtn" style="flex:1;">🏅 Huy hiệu (<span id="badgeCountInline">0</span>/<span id="badgeTotalInline">0</span>)</button>
+      <button class="btn-outline-small" id="openLeaderboardBtn" style="flex:1;">🏆 Xếp hạng</button>
+    </div>
+    <div class="setup-actions">
+      <button class="btn" id="startRealBtn" disabled>Bắt đầu chơi — dùng GPS thật</button>
+      <button class="btn btn-ghost" id="startDemoBtn" disabled>Bắt đầu — mô phỏng (không GPS)</button>
+      <button class="btn-outline-small" id="presetBtn">+ Bộ 6 địa danh mẫu (test nhanh)</button>
+    </div>
+    <button class="btn-outline-small" id="toggleDebugBtn" style="width:100%; opacity:0.6; display:none;">🧪 Công cụ thử nghiệm (ẩn đi khi phát hành thật)</button>
+    <div id="debugPanel" style="display:none; flex-direction:column; gap:8px;">
+      <div class="hint-text" id="debugGpsInfo">GPS: chưa có dữ liệu</div>
+      <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink);">
+        <input type="checkbox" id="debugSkipRadiusChk"> Bỏ qua khoảng cách (test nhanh)
+      </label>
+      <button class="btn-outline-small" id="debugResetBtn">🗑️ Xoá dữ liệu thử nghiệm trên máy này</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Hồ sơ & thành tích ===================== -->
+<div class="win-overlay" id="profileModalOverlay">
+  <div class="win-card" style="max-width:400px; text-align:left; max-height:80vh; overflow-y:auto; padding:20px 18px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0; font-size:17px;">👤 Hồ sơ &amp; thành tích</h2>
+      <button class="tc-close" id="closeProfileModal" style="font-size:20px;">✕</button>
+    </div>
+    <div class="field-label">Biệt danh</div>
+    <div class="search-row" style="margin-bottom:12px;">
+      <input type="text" id="profileNicknameInput" placeholder="Đặt tên hiển thị của bạn" maxlength="20">
+      <button id="profileNicknameSaveBtn">Lưu</button>
+    </div>
+    <div id="profileStatsBox" style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;"></div>
+    <div class="hint-text" id="profileSyncBox" style="margin-bottom:14px;"></div>
+    <button class="btn-outline-small" id="profileSeeBadgesBtn" style="width:100%;">🏅 Xem danh sách huy hiệu</button>
+  </div>
+</div>
+
+<!-- ===================== MODAL: danh sách điểm ===================== -->
+<div class="win-overlay" id="pointsModalOverlay">
+  <div class="win-card" style="max-width:420px; text-align:left; max-height:78vh; display:flex; flex-direction:column; padding:20px 18px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-shrink:0;">
+      <h2 style="margin:0; font-size:17px;">Danh sách điểm (<span id="pointCount">0</span>)</h2>
+      <button class="tc-close" id="closePointsModal" style="font-size:20px;">✕</button>
+    </div>
+    <div id="pointsList" style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px; padding-right:2px;"></div>
+  </div>
+</div>
+
+<!-- ===================== GAME SHEET ===================== -->
+<div class="sheet" id="gameSheet" style="display:none;">
+  <div class="sheet-handle" id="gameHandle">
+    <div class="grip"></div>
+    <div class="sheet-title">Danh sách điểm (gần nhất trước)</div>
+    <div class="sheet-toggle" id="gameToggle">Thu gọn</div>
+  </div>
+  <div class="sheet-body" id="checklist"></div>
+</div>
+
+<!-- ===================== XIN QUYỀN VỊ TRÍ (đồng ý rõ ràng trước khi lấy GPS) ===================== -->
+<div class="win-overlay" id="consentOverlay">
+  <div class="win-card" style="text-align:left;">
+    <h2 style="text-align:center;">📍 Dùng vị trí của bạn</h2>
+    <p style="text-align:left;">Ngọc Rồng cần biết vị trí của bạn để xác định đúng phường/xã và tính khoảng cách tới từng điểm điểm danh.</p>
+    <p style="text-align:left;">• Chỉ dùng <b>trong lúc bạn đang mở và chơi app</b> — khi trình duyệt hỏi quyền, hãy chọn <b>"Chỉ khi đang dùng ứng dụng" / "While using the app"</b>.</p>
+    <p style="text-align:left;">• Vị trí <b>không được lưu trữ</b> ở bất kỳ đâu, không gửi cho ai ngoài việc tra tên phường/xã qua dịch vụ bản đồ OpenStreetMap.</p>
+    <p style="text-align:left;">• Bạn có thể từ chối và dùng <b>chế độ mô phỏng</b> (chạm bản đồ thay vì GPS thật) nếu không muốn chia sẻ vị trí.</p>
+    <button class="btn" id="consentAcceptBtn">Tôi đồng ý — Tiếp tục</button>
+    <button class="btn btn-ghost" id="consentDeclineBtn">Không đồng ý, dùng chế độ mô phỏng</button>
+  </div>
+</div>
+
+<div class="win-overlay" id="winOverlay">
+  <div class="win-card">
+    <svg class="stamp-big" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#9B3B33" stroke-width="5"/>
+      <circle cx="50" cy="50" r="32" fill="none" stroke="#9B3B33" stroke-width="2.5"/>
+      <path d="M32 52 L45 65 L70 36" fill="none" stroke="#9B3B33" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h2>Đã điểm danh đủ!</h2>
+    <p>Bạn hoàn thành hành trình trong <span class="time" id="finalTime">00:00</span></p>
+    <p id="scoreSummary" style="margin-top:-10px;">Thu được <span class="time" id="finalUnits">0</span> đơn vị <span id="finalGemName">Thạch Anh</span></p>
+    <p id="scoreSummary2" style="margin-top:-10px;">Quy đổi: <span class="time" id="finalScore">0</span> kara kim cương</p>
+    <p id="roundAdvanceNote" style="margin-top:-10px; display:none;"></p>
+    <div id="newBadgesBox" style="display:none; margin:-6px 0 14px;"></div>
+    <div id="leaderboardSubmitBox" style="display:none; text-align:left; margin-bottom:14px;">
+      <div class="field-label">Biệt danh trên bảng xếp hạng</div>
+      <div class="search-row">
+        <input type="text" id="nicknameInput" placeholder="Ví dụ: Thợ Săn Bắc Ninh" maxlength="20">
+        <button id="submitScoreBtn">Gửi</button>
+      </div>
+      <div class="hint-text" id="submitScoreStatus" style="margin-top:6px; display:none;"></div>
+    </div>
+    <button class="btn" id="shareResultBtn" style="margin-bottom:8px;">📤 Chia sẻ kết quả</button>
+    <button class="btn" id="playAgainBtn">Thiết lập khu vực mới</button>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Huy hiệu ===================== -->
+<div class="win-overlay" id="badgesModalOverlay">
+  <div class="win-card" style="max-width:420px; text-align:left; max-height:78vh; display:flex; flex-direction:column; padding:20px 18px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-shrink:0;">
+      <h2 style="margin:0; font-size:17px;">🏅 Huy hiệu</h2>
+      <button class="tc-close" id="closeBadgesModal" style="font-size:20px;">✕</button>
+    </div>
+    <div id="badgesList" style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px;"></div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Bảng xếp hạng ===================== -->
+<div class="win-overlay" id="leaderboardModalOverlay">
+  <div class="win-card" style="max-width:420px; text-align:left; max-height:78vh; display:flex; flex-direction:column; padding:20px 18px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-shrink:0;">
+      <h2 style="margin:0; font-size:17px;">🏆 Bảng xếp hạng</h2>
+      <button class="tc-close" id="closeLeaderboardModal" style="font-size:20px;">✕</button>
+    </div>
+    <div class="diff-row" id="lbTabs" style="flex-shrink:0; margin-bottom:10px;">
+      <button class="diff-btn active" data-tier="ward"><span class="d-title">🪨 Thạch Anh</span></button>
+      <button class="diff-btn" data-tier="province"><span class="d-title">💚 Ngọc Lục Bảo</span></button>
+      <button class="diff-btn" data-tier="country"><span class="d-title">💎 Kim Cương</span></button>
+    </div>
+    <div id="leaderboardList" style="overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:6px;"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script>
+  // ============ Độ khó & điểm thưởng ============
+  const DIFFICULTY = {
+    ward:     { label: '🪨 Thạch Anh — trong 1 phường/xã',   multiplier: 1, radiusKm: 2,  count: 99, pointRadius: 25, unitName: 'Thạch Anh',    gemIcon: '🪨', karatRate: 1000 },
+    province: { label: '💚 Ngọc Lục Bảo — trong 1 tỉnh',      multiplier: 3, radiusKm: 35, count: 99, pointRadius: 20, unitName: 'Ngọc Lục Bảo', gemIcon: '💚', karatRate: 100 },
+    country:  { label: '💎 Kim Cương — toàn quốc',            multiplier: 8, radiusKm: 8,  count: 99, pointRadius: 15, unitName: 'Kim Cương',    gemIcon: '💎', karatRate: 10 }
+  };
+  const GEM_UNITS_PER_CHECKIN = 10; // mỗi lượt điểm danh khai thác được 10 đơn vị đá quý của cấp đang chơi
+  let currentDifficulty = 'ward';
+  let gameDifficulty = 'ward';
+  let gameRoundInfo = null;
+  let gemUnits = 0; // tổng đơn vị đá quý thô thu được trong ván chơi hiện tại
+
+  // Bộ sinh số ngẫu nhiên có seed: cùng khu vực + cùng "vòng" sẽ luôn cho ra đúng 1 bộ
+  // 99 toạ độ — nghĩa là mọi người chơi chọn cùng khu vực, cùng vòng, sẽ thấy CÙNG các
+  // điểm điểm danh. Vòng chỉ tăng lên (đổi sang 99 vị trí mới) khi một người chơi đã
+  // điểm danh hết toàn bộ 99 điểm của vòng hiện tại.
+  function hashSeed(str){
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++){
+      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    return () => {
+      h = Math.imul(h ^ (h >>> 16), 2246822507);
+      h = Math.imul(h ^ (h >>> 13), 3266489909);
+      h ^= h >>> 16;
+      return (h >>> 0) / 4294967296;
+    };
+  }
+  let currentAreaLabel = '';
+
+  // ==================================================================
+  // ĐỒNG BỘ "VÒNG" CHO MỌI NGƯỜI CHƠI (tuỳ chọn — dùng Firebase Realtime Database)
+  // ==================================================================
+  // Mặc định (chưa điền cấu hình bên dưới) app sẽ lưu số vòng CỤC BỘ trên từng máy
+  // (localStorage) — mỗi máy tự tiến độ riêng.
+  //
+  // Muốn số vòng dùng CHUNG thật sự cho mọi người chơi (ai điểm danh hết trước, mọi
+  // máy khác đều thấy vòng mới ngay lập tức), làm theo 4 bước sau (miễn phí, ~3 phút):
+  //   1) Vào https://console.firebase.google.com → Tạo dự án mới (Add project).
+  //   2) Trong dự án, vào mục "Build → Realtime Database" → Create Database →
+  //      chọn "Start in test mode" (cho phép đọc/ghi công khai, phù hợp cho trò chơi này).
+  //   3) Vào Project settings (bánh răng) → General → "Your apps" → bấm biểu tượng
+  //      Web </> để tạo 1 Web App → sao chép đoạn "firebaseConfig".
+  //   4) Dán đè vào biến FIREBASE_CONFIG ngay bên dưới rồi lưu lại file.
+  // (Các giá trị trong firebaseConfig — apiKey, projectId... — không phải bí mật, việc
+  // ai được đọc/ghi dữ liệu do "Realtime Database Rules" trong Firebase quyết định.)
+  const FIREBASE_CONFIG = {
+    apiKey: "YOUR_API_KEY",
+    databaseURL: "https://YOUR_PROJECT-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "YOUR_PROJECT"
+  };
+
+  let fbDb = null;
+  try{
+    if (FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY" && window.firebase){
+      firebase.initializeApp(FIREBASE_CONFIG);
+      fbDb = firebase.database();
+    }
+  }catch(e){ fbDb = null; }
+  const syncOnline = !!fbDb;
+
+  // ---- Lưu số "vòng" hiện tại của mỗi khu vực ----
+  // Có Firebase → dùng chung cho mọi người chơi, cập nhật thời gian thực.
+  // Không có Firebase → lùi về lưu trên trình duyệt của riêng máy này.
+  function roundKey(difficultyKey, areaLabel){ return `${difficultyKey}__${areaLabel}`.replace(/[.#$/\[\]]/g, '_'); }
+
+  async function getRound(difficultyKey, areaLabel){
+    const key = roundKey(difficultyKey, areaLabel);
+    if (fbDb){
+      try{
+        const snap = await fbDb.ref('rounds/' + key).get();
+        return snap.exists() ? parseInt(snap.val(), 10) || 1 : 1;
+      }catch(e){ /* rơi xuống local nếu mất mạng */ }
+    }
+    try{ return parseInt(localStorage.getItem('sandau_round__' + key), 10) || 1; }catch(e){ return 1; }
+  }
+
+  async function advanceRound(difficultyKey, areaLabel, completedRound){
+    const key = roundKey(difficultyKey, areaLabel);
+    const nextRound = completedRound + 1;
+    if (fbDb){
+      try{
+        // Transaction: chỉ tăng lên nếu vòng đang lưu <= vòng người này vừa hoàn thành,
+        // tránh 2 người cùng hoàn thành 1 lúc làm số vòng nhảy lung tung.
+        await fbDb.ref('rounds/' + key).transaction(current => {
+          const cur = current || 1;
+          return cur <= completedRound ? nextRound : cur;
+        });
+        return;
+      }catch(e){ /* rơi xuống local nếu mất mạng */ }
+    }
+    try{ localStorage.setItem('sandau_round__' + key, String(nextRound)); }catch(e){}
+  }
+
+  document.querySelectorAll('#diffRow .diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentDifficulty = btn.dataset.diff;
+      document.querySelectorAll('#diffRow .diff-btn').forEach(b => b.classList.toggle('active', b === btn));
+      document.getElementById('provinceBlock').style.display = currentDifficulty === 'ward' ? 'none' : 'block';
+      document.getElementById('searchBlock').style.display = 'none';
+      document.getElementById('wardAutoBlock').style.display = currentDifficulty === 'ward' ? 'block' : 'none';
+      document.getElementById('genAreaBtn').style.display = currentDifficulty === 'country' ? 'block' : 'none';
+      if (currentDifficulty === 'province'){
+        document.getElementById('tapHint').style.display = 'block';
+        document.getElementById('tapHint').textContent = 'Chọn tỉnh/thành ở trên để rải 99 vị trí.';
+      } else {
+        document.getElementById('tapHint').style.display = 'none';
+      }
+      document.getElementById('roundInfoBox').style.display = 'none';
+      if (currentDifficulty === 'ward') requestLocationConsent(autoDetectWardHere);
+    });
+  });
+
+  // ================= HUY HIỆU (lưu cục bộ trên máy, không gửi đi đâu cả) =================
+  const BADGES = [
+    { id:'first_round',    icon:'🥇', title:'Vòng đầu tiên',        desc:'Hoàn thành 1 vòng bất kỳ' },
+    { id:'all_tiers',      icon:'🌈', title:'Đa dạng',              desc:'Hoàn thành ít nhất 1 vòng ở cả 3 cấp đá quý' },
+    { id:'speedrun',       icon:'⚡', title:'Tốc độ',               desc:'Hoàn thành 1 vòng trong dưới 15 phút' },
+    { id:'diamond_hunter', icon:'💎', title:'Thợ săn Kim Cương',    desc:'Hoàn thành 1 vòng cấp Kim Cương (toàn quốc)' },
+    { id:'grinder',        icon:'⛏️', title:'Thợ mỏ chăm chỉ',      desc:'Tích luỹ tổng cộng 5000 đơn vị đá quý (mọi cấp cộng lại)' },
+    { id:'five_rounds',    icon:'🔁', title:'Kiên trì',             desc:'Hoàn thành 5 vòng chơi' }
+  ];
+  function defaultStats(){ return { roundsByTier:{ward:0,province:0,country:0}, totalUnitsByTier:{ward:0,province:0,country:0}, bestTimeSec:{ward:null,province:null,country:null}, totalRounds:0 }; }
+  function loadStats(){ try{ return { ...defaultStats(), ...(JSON.parse(localStorage.getItem('ngocrong_stats')) || {}) }; }catch(e){ return defaultStats(); } }
+  function saveStats(s){ try{ localStorage.setItem('ngocrong_stats', JSON.stringify(s)); }catch(e){} }
+  function loadBadges(){ try{ return JSON.parse(localStorage.getItem('ngocrong_badges')) || []; }catch(e){ return []; } }
+  function saveBadges(b){ try{ localStorage.setItem('ngocrong_badges', JSON.stringify(b)); }catch(e){} }
+
+  function checkAndAwardBadges(stats, timeSec, tier){
+    const earned = loadBadges();
+    const newly = [];
+    const award = id => { if (!earned.includes(id)){ earned.push(id); newly.push(id); } };
+    if (stats.totalRounds >= 1) award('first_round');
+    if (stats.roundsByTier.ward > 0 && stats.roundsByTier.province > 0 && stats.roundsByTier.country > 0) award('all_tiers');
+    if (timeSec < 900) award('speedrun');
+    if (tier === 'country') award('diamond_hunter');
+    const totalUnits = stats.totalUnitsByTier.ward + stats.totalUnitsByTier.province + stats.totalUnitsByTier.country;
+    if (totalUnits >= 5000) award('grinder');
+    if (stats.totalRounds >= 5) award('five_rounds');
+    saveBadges(earned);
+    return newly;
+  }
+
+  function renderBadgeCountBadge(){
+    const earned = loadBadges();
+    document.getElementById('badgeCountInline').textContent = earned.length;
+    document.getElementById('badgeTotalInline').textContent = BADGES.length;
+  }
+
+  function renderBadgesModal(){
+    const earned = loadBadges();
+    const list = document.getElementById('badgesList');
+    list.innerHTML = '';
+    BADGES.forEach(b => {
+      const got = earned.includes(b.id);
+      const row = document.createElement('div');
+      row.className = 'point-row';
+      row.style.opacity = got ? '1' : '0.5';
+      row.innerHTML = `<div class="badge" style="width:32px;height:32px;font-size:16px;background:${got ? 'var(--good)' : 'rgba(27,42,46,0.3)'};">${got ? b.icon : '🔒'}</div>
+        <div class="info" style="display:flex;flex-direction:column;">
+          <div class="name" style="white-space:normal;">${escapeHtml(b.title)}</div>
+          <div class="hint" style="white-space:normal;">${escapeHtml(b.desc)}</div>
+        </div>`;
+      list.appendChild(row);
+    });
+  }
+  renderBadgeCountBadge();
+
+  document.getElementById('openBadgesBtn').addEventListener('click', () => {
+    renderBadgesModal();
+    document.getElementById('badgesModalOverlay').classList.add('show');
+  });
+  document.getElementById('closeBadgesModal').addEventListener('click', () => {
+    document.getElementById('badgesModalOverlay').classList.remove('show');
+  });
+
+  // ================= BẢNG XẾP HẠNG (dùng Firebase nếu đã cấu hình; biệt danh tự đặt, không phải tên thật) =================
+  async function submitScore(nickname, tier, karat, timeSec, areaLabel){
+    if (!fbDb) return false;
+    const safeName = String(nickname).trim().slice(0, 20) || 'Người chơi ẩn danh';
+    try{
+      await fbDb.ref('leaderboard/' + tier).push({
+        nickname: safeName,
+        karat: Math.round(karat * 100) / 100,
+        timeSec,
+        area: String(areaLabel).slice(0, 60),
+        ts: Date.now()
+      });
+      return true;
+    }catch(e){ return false; }
+  }
+
+  async function fetchLeaderboard(tier){
+    if (!fbDb) return null; // null = chưa bật đồng bộ, khác với mảng rỗng (bật rồi nhưng chưa có ai)
+    try{
+      const snap = await fbDb.ref('leaderboard/' + tier).orderByChild('karat').limitToLast(20).get();
+      const arr = [];
+      snap.forEach(child => arr.push(child.val()));
+      arr.sort((a, b) => b.karat - a.karat);
+      return arr.slice(0, 10);
+    }catch(e){ return []; }
+  }
+
+  let lbCurrentTier = 'ward';
+  async function renderLeaderboard(){
+    const list = document.getElementById('leaderboardList');
+    list.innerHTML = `<div class="empty-note">Đang tải…</div>`;
+    const rows = await fetchLeaderboard(lbCurrentTier);
+    if (rows === null){
+      list.innerHTML = `<div class="empty-note">Bảng xếp hạng cần bật đồng bộ trực tuyến (Firebase) — xem ghi chú trong mã nguồn file, mục FIREBASE_CONFIG.</div>`;
+      return;
+    }
+    if (!rows.length){
+      list.innerHTML = `<div class="empty-note">Chưa có ai lập kỷ lục ở cấp này — trở thành người đầu tiên!</div>`;
+      return;
+    }
+    list.innerHTML = '';
+    rows.forEach((r, i) => {
+      const row = document.createElement('div');
+      row.className = 'point-row';
+      row.innerHTML = `<div class="badge" style="width:26px;height:26px;">${i+1}</div>
+        <div class="info" style="flex:1; display:flex; flex-direction:column;">
+          <div class="name" style="font-size:12px;font-weight:600;">${escapeHtml(r.nickname || 'Ẩn danh')}</div>
+          <div class="hint" style="font-size:10px;">${escapeHtml(r.area || '')}</div>
+        </div>
+        <div style="font-weight:700; color:var(--stamp); font-size:12px;">${(r.karat ?? 0).toFixed(2)} kara</div>`;
+      list.appendChild(row);
+    });
+  }
+
+  document.getElementById('openLeaderboardBtn').addEventListener('click', () => {
+    document.getElementById('leaderboardModalOverlay').classList.add('show');
+    renderLeaderboard();
+  });
+  document.getElementById('closeLeaderboardModal').addEventListener('click', () => {
+    document.getElementById('leaderboardModalOverlay').classList.remove('show');
+  });
+  document.querySelectorAll('#lbTabs .diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      lbCurrentTier = btn.dataset.tier;
+      document.querySelectorAll('#lbTabs .diff-btn').forEach(b => b.classList.toggle('active', b === btn));
+      renderLeaderboard();
+    });
+  });
+
+  // ================= CÔNG CỤ THỬ NGHIỆM (chỉ để test trước khi phát hành, nên ẩn/bỏ đi
+  // khi đưa cho người chơi thật) =================
+  let debugSkipRadius = false;
+  document.getElementById('toggleDebugBtn').addEventListener('click', () => {
+    const panel = document.getElementById('debugPanel');
+    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+  });
+  document.getElementById('debugSkipRadiusChk').addEventListener('change', (e) => {
+    debugSkipRadius = e.target.checked;
+  });
+  document.getElementById('debugResetBtn').addEventListener('click', () => {
+    try{
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('ngocrong_') || k.startsWith('sandau_round__'))
+        .forEach(k => localStorage.removeItem(k));
+    }catch(e){}
+    showToast('Đã xoá dữ liệu thử nghiệm trên máy này — tải lại trang để bắt đầu như người chơi mới.', 3600);
+  });
+  function updateDebugGpsInfo(){
+    const el = document.getElementById('debugGpsInfo');
+    if (!el) return;
+    if (!state.myPos){ el.textContent = 'GPS: chưa có dữ liệu'; return; }
+    el.textContent = `GPS: ${state.myPos.lat.toFixed(6)}, ${state.myPos.lng.toFixed(6)} — sai số ±${Math.round(state.myPos.accuracy || 0)}m`;
+  }
+
+  // ================= CHIA SẺ KẾT QUẢ =================
+  let lastResult = null; // { areaLabel, tier, karat, gemUnits, unitName, gemIcon, timeSec }
+
+  async function shareResult(){
+    if (!lastResult) return;
+    const { areaLabel, gemIcon, unitName, gemUnits, karat, timeSec } = lastResult;
+    const text = `💎 Ngọc Rồng: mình vừa săn được ${gemUnits} đơn vị ${gemIcon} ${unitName} tại ${areaLabel} (≈ ${karat.toFixed(2)} kara kim cương) trong ${fmtTime(timeSec*1000)}! Thử sức xem bạn săn được bao nhiêu nhé.`;
+    if (navigator.share){
+      try{ await navigator.share({ text }); return; }catch(e){ /* người dùng bấm huỷ, bỏ qua */ }
+    }
+    try{
+      await navigator.clipboard.writeText(text);
+      showToast('Đã copy kết quả — dán vào Zalo/Facebook để chia sẻ!', 3000);
+    }catch(e){
+      showToast(text, 5000);
+    }
+  }
+  document.getElementById('shareResultBtn').addEventListener('click', shareResult);
+
+  document.getElementById('submitScoreBtn').addEventListener('click', async () => {
+    if (!lastResult) return;
+    const nickInput = document.getElementById('nicknameInput');
+    const nickname = nickInput.value.trim();
+    const statusEl = document.getElementById('submitScoreStatus');
+    if (!nickname){ nickInput.focus(); return; }
+    setNickname(nickname);
+    statusEl.style.display = 'block';
+    statusEl.textContent = 'Đang gửi…';
+    const ok = await submitScore(nickname, lastResult.tier, lastResult.karat, lastResult.timeSec, lastResult.areaLabel);
+    statusEl.textContent = ok ? '✅ Đã lên bảng xếp hạng!' : 'Không gửi được — kiểm tra kết nối mạng.';
+  });
+
+  // ================= THANH TÊN NGƯỜI CHƠI + HỒ SƠ & THÀNH TÍCH =================
+  function getNickname(){ try{ return localStorage.getItem('ngocrong_nickname') || ''; }catch(e){ return ''; } }
+  function setNickname(name){
+    try{ localStorage.setItem('ngocrong_nickname', name); }catch(e){}
+    document.getElementById('playerNameDisplay').textContent = name || 'Chưa đặt tên';
+  }
+  document.getElementById('playerNameDisplay').textContent = getNickname() || 'Chưa đặt tên';
+
+  function renderProfileModal(){
+    document.getElementById('profileNicknameInput').value = getNickname();
+    const stats = loadStats();
+    const badgesEarned = loadBadges().length;
+    let totalKarat = 0;
+    Object.keys(DIFFICULTY).forEach(k => { totalKarat += (stats.totalUnitsByTier[k] || 0) / DIFFICULTY[k].karatRate; });
+    const statsBox = document.getElementById('profileStatsBox');
+    statsBox.innerHTML = `
+      <div class="point-row"><div class="badge" style="width:26px;height:26px;">🔁</div><div class="info" style="flex:1;"><div class="name">Vòng đã hoàn thành</div></div><div style="font-weight:700;color:var(--stamp);">${stats.totalRounds}</div></div>
+      <div class="point-row"><div class="badge" style="width:26px;height:26px;">💎</div><div class="info" style="flex:1;"><div class="name">Tổng kara kim cương</div></div><div style="font-weight:700;color:var(--stamp);">${totalKarat.toFixed(2)}</div></div>
+      <div class="point-row"><div class="badge" style="width:26px;height:26px;">🏅</div><div class="info" style="flex:1;"><div class="name">Huy hiệu đã mở</div></div><div style="font-weight:700;color:var(--stamp);">${badgesEarned}/${BADGES.length}</div></div>`;
+    const syncBox = document.getElementById('profileSyncBox');
+    syncBox.textContent = syncOnline
+      ? '🟢 Đồng bộ trực tuyến đang bật — số vòng & bảng xếp hạng dùng chung cho mọi người chơi.'
+      : '🟡 Đồng bộ trực tuyến chưa bật — số vòng chỉ lưu riêng trên máy này.';
+  }
+
+  document.getElementById('playerBarBtn').addEventListener('click', () => {
+    renderProfileModal();
+    document.getElementById('profileModalOverlay').classList.add('show');
+  });
+  document.getElementById('closeProfileModal').addEventListener('click', () => {
+    document.getElementById('profileModalOverlay').classList.remove('show');
+  });
+  document.getElementById('profileNicknameSaveBtn').addEventListener('click', () => {
+    const name = document.getElementById('profileNicknameInput').value.trim();
+    if (!name) return;
+    setNickname(name);
+    showToast('Đã lưu biệt danh!');
+  });
+  document.getElementById('profileSeeBadgesBtn').addEventListener('click', () => {
+    document.getElementById('profileModalOverlay').classList.remove('show');
+    renderBadgesModal();
+    document.getElementById('badgesModalOverlay').classList.add('show');
+  });
+
+  // ============ Dữ liệu 34 tỉnh/thành sau sáp nhập (từ 07/2025) ============
+  // Toạ độ là trung tâm hành chính gần đúng, dùng để đưa bản đồ tới khu vực đã chọn.
+  const PROVINCES = [
+    { name: "TP. Hà Nội", lat: 21.0285, lng: 105.8542, zoom: 10 },
+    { name: "TP. Hồ Chí Minh", lat: 10.7769, lng: 106.7009, zoom: 9 },
+    { name: "TP. Hải Phòng", lat: 20.8449, lng: 106.6881, zoom: 9 },
+    { name: "TP. Đà Nẵng", lat: 16.0544, lng: 108.2022, zoom: 9 },
+    { name: "TP. Cần Thơ", lat: 10.0452, lng: 105.7469, zoom: 9 },
+    { name: "TP. Huế", lat: 16.4637, lng: 107.5909, zoom: 9 },
+    { name: "An Giang", lat: 10.0125, lng: 105.0808, zoom: 9 },
+    { name: "Bắc Ninh", lat: 21.2731, lng: 106.1946, zoom: 9 },
+    { name: "Cao Bằng", lat: 22.6667, lng: 106.2500, zoom: 9 },
+    { name: "Cà Mau", lat: 9.1769, lng: 105.1524, zoom: 9 },
+    { name: "Đắk Lắk", lat: 12.6667, lng: 108.0500, zoom: 9 },
+    { name: "Điện Biên", lat: 21.3833, lng: 103.0167, zoom: 9 },
+    { name: "Đồng Nai", lat: 10.9447, lng: 106.8243, zoom: 9 },
+    { name: "Đồng Tháp", lat: 10.4938, lng: 105.6881, zoom: 9 },
+    { name: "Gia Lai", lat: 13.7830, lng: 109.2193, zoom: 8 },
+    { name: "Hà Tĩnh", lat: 18.3428, lng: 105.9057, zoom: 9 },
+    { name: "Hưng Yên", lat: 20.6464, lng: 106.0512, zoom: 9 },
+    { name: "Khánh Hòa", lat: 12.2388, lng: 109.1967, zoom: 8 },
+    { name: "Lai Châu", lat: 22.3964, lng: 103.4591, zoom: 9 },
+    { name: "Lào Cai", lat: 21.7168, lng: 104.8986, zoom: 9 },
+    { name: "Lâm Đồng", lat: 11.9404, lng: 108.4583, zoom: 8 },
+    { name: "Lạng Sơn", lat: 21.8537, lng: 106.7610, zoom: 9 },
+    { name: "Nghệ An", lat: 18.6796, lng: 105.6813, zoom: 8 },
+    { name: "Ninh Bình", lat: 20.2506, lng: 105.9744, zoom: 9 },
+    { name: "Phú Thọ", lat: 21.3227, lng: 105.4020, zoom: 8 },
+    { name: "Quảng Ngãi", lat: 15.1205, lng: 108.7922, zoom: 8 },
+    { name: "Quảng Ninh", lat: 21.0064, lng: 107.2925, zoom: 9 },
+    { name: "Quảng Trị", lat: 17.4739, lng: 106.6222, zoom: 8 },
+    { name: "Sơn La", lat: 21.3256, lng: 103.9188, zoom: 8 },
+    { name: "Tây Ninh", lat: 11.3100, lng: 106.0989, zoom: 8 },
+    { name: "Thái Nguyên", lat: 21.5942, lng: 105.8480, zoom: 9 },
+    { name: "Thanh Hóa", lat: 19.8067, lng: 105.7852, zoom: 8 },
+    { name: "Tuyên Quang", lat: 21.8237, lng: 105.2280, zoom: 8 },
+    { name: "Vĩnh Long", lat: 10.2397, lng: 105.9722, zoom: 9 }
+  ];
+
+  const PRESET_POINTS = [
+    { name: "Hồ Gươm", city: "TP. Hà Nội", lat: 21.0285, lng: 105.8524, radius: 80 },
+    { name: "Nhà thờ Đức Bà", city: "TP. Hồ Chí Minh", lat: 10.7798, lng: 106.6990, radius: 70 },
+    { name: "Cầu Rồng", city: "TP. Đà Nẵng", lat: 16.0613, lng: 108.2277, radius: 80 },
+    { name: "Kinh thành Huế", city: "TP. Huế", lat: 16.4698, lng: 107.5796, radius: 150 },
+    { name: "Bến Ninh Kiều", city: "TP. Cần Thơ", lat: 10.0341, lng: 105.7860, radius: 90 },
+    { name: "Vịnh Hạ Long", city: "Quảng Ninh", lat: 20.9101, lng: 107.1839, radius: 150 }
+  ];
+
+  const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([16.6, 106.5], 5.4);
+
+  const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    subdomains: 'abc'
+  });
+  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19
+  });
+  const satelliteLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19
+  });
+  streetLayer.addTo(map);
+  let mapMode = 'street';
+
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  L.control.attribution({ position: 'bottomleft', prefix: false }).addAttribution('© OpenStreetMap / © Esri').addTo(map);
+
+  // ---- Nút chuyển Bản đồ thường / Vệ tinh ----
+  const MapToggle = L.Control.extend({
+    options: { position: 'topright' },
+    onAdd: function(){
+      const el = L.DomUtil.create('div');
+      el.id = 'mapModeBtn';
+      el.style.cssText = 'background:var(--paper); border:1px solid rgba(184,134,46,0.4); border-radius:8px; padding:7px 10px; font-family:Inter,sans-serif; font-size:12px; font-weight:600; color:var(--sea-deep); cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.25); margin-top:96px;';
+      el.textContent = '🛰️ Vệ tinh';
+      L.DomEvent.disableClickPropagation(el);
+      el.addEventListener('click', () => {
+        if (mapMode === 'street'){
+          map.removeLayer(streetLayer);
+          satelliteLayer.addTo(map); satelliteLabels.addTo(map);
+          mapMode = 'satellite';
+          el.textContent = '🗺️ Bản đồ thường';
+        } else {
+          map.removeLayer(satelliteLayer); map.removeLayer(satelliteLabels);
+          streetLayer.addTo(map);
+          mapMode = 'street';
+          el.textContent = '🛰️ Vệ tinh';
+        }
+      });
+      return el;
+    }
+  });
+  map.addControl(new MapToggle());
+
+  const pinSVG = () => `<svg viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg">
+      <path class="body" d="M17 2 C10 2 5 7 5 14 C5 22 17 32 17 32 C17 32 29 22 29 14 C29 7 24 2 17 2 Z"/>
+      <circle cx="17" cy="14" r="5.5" fill="#F1ECDD"/>
+    </svg>`;
+
+  // ============ Trạng thái chung ============
+  let LOCATIONS = [];          // các điểm điểm danh do người chơi chọn
+  let nextPointId = 1;
+  let mode = 'setup';           // 'setup' | 'game'
+
+  const state = {
+    checked: new Set(), startTime: null, timerInterval: null, finished: false,
+    myPos: null, watchId: null, demoMode: false, selected: null
+  };
+  const markers = {};
+  const radiusCircles = {};
+  const setupMarkers = {};
+  let meMarker = null;
+
+  function haversine(lat1, lng1, lat2, lng2){
+    const R = 6371000, toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+  function fmtTime(ms){ const s=Math.floor(ms/1000); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+  function fmtDist(m){ if (m==null) return '— m'; return m<1000 ? `${Math.round(m)} m` : `${(m/1000).toFixed(1)} km`; }
+  // An toàn: khử ký tự HTML đặc biệt trước khi chèn văn bản (tên phường/xã, kết quả tìm
+  // kiếm...) vào trang bằng innerHTML — tránh việc dữ liệu từ bên ngoài (địa danh do
+  // OpenStreetMap trả về, hoặc chữ người chơi tự gõ) chèn được mã HTML/script lạ vào trang.
+  function escapeHtml(str){
+    return String(str ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+
+  // ================= Xin sự đồng ý dùng vị trí (chỉ lưu LỰA CHỌN, không lưu vị trí) =================
+  // localStorage ở đây chỉ ghi nhớ "người chơi đã từng đồng ý" (một chữ có/không) để không
+  // hỏi lại mỗi lần mở app — bản thân toạ độ GPS không bao giờ được ghi vào đây hay bất kỳ
+  // đâu khác.
+  let pendingConsentCallback = null;
+  function hasLocationConsent(){
+    try{ return localStorage.getItem('ngocrong_location_consent') === 'yes'; }catch(e){ return false; }
+  }
+  function requestLocationConsent(onGranted){
+    if (hasLocationConsent()){ onGranted(); return; }
+    pendingConsentCallback = onGranted;
+    document.getElementById('consentOverlay').classList.add('show');
+  }
+  document.getElementById('consentAcceptBtn').addEventListener('click', () => {
+    try{ localStorage.setItem('ngocrong_location_consent', 'yes'); }catch(e){}
+    document.getElementById('consentOverlay').classList.remove('show');
+    const cb = pendingConsentCallback; pendingConsentCallback = null;
+    if (cb) cb();
+  });
+  document.getElementById('consentDeclineBtn').addEventListener('click', () => {
+    document.getElementById('consentOverlay').classList.remove('show');
+    pendingConsentCallback = null;
+    showToast('Bạn có thể bấm "Bắt đầu — chế độ mô phỏng" để chơi mà không cần chia sẻ vị trí.', 3600);
+  });
+  function showToast(msg, ms=2400){
+    const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+    clearTimeout(showToast._t); showToast._t=setTimeout(()=>t.classList.remove('show'), ms);
+  }
+
+  // ================= PROVINCE SELECT =================
+  const provinceSelect = document.getElementById('provinceSelect');
+  PROVINCES.forEach((p, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = p.name;
+    provinceSelect.appendChild(opt);
+  });
+  currentAreaLabel = PROVINCES[0].name;
+  provinceSelect.addEventListener('change', () => {
+    const p = PROVINCES[provinceSelect.value];
+    currentAreaLabel = p.name;
+    map.flyTo([p.lat, p.lng], p.zoom, { duration: 0.9 });
+    if (currentDifficulty === 'province'){
+      generateAreaSet('province', p.lat, p.lng, p.name);
+    }
+  });
+
+  // ================= SEARCH (Nominatim / OpenStreetMap) =================
+  const searchInput = document.getElementById('searchInput');
+  const searchBtn = document.getElementById('searchBtn');
+  const searchResults = document.getElementById('searchResults');
+
+  async function runSearch(){
+    const q = searchInput.value.trim();
+    if (!q){ return; }
+    const province = PROVINCES[provinceSelect.value]?.name.replace(/^TP\.\s*/, '') || '';
+    const query = `${q}, ${province}, Việt Nam`;
+    searchResults.innerHTML = `<div class="empty-note">Đang tìm…</div>`;
+    try{
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&countrycodes=vn&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'vi' } });
+      const data = await res.json();
+      if (!data.length){
+        searchResults.innerHTML = `<div class="empty-note">Không tìm thấy — thử tên khác hoặc chạm trực tiếp vào bản đồ.</div>`;
+        return;
+      }
+      searchResults.innerHTML = '';
+      data.forEach(r => {
+        const row = document.createElement('div');
+        row.className = 'search-result';
+        const label = r.display_name.split(',').slice(0,3).join(', ');
+        row.innerHTML = `<span>${escapeHtml(label)}</span><span class="add-tag">+ Thêm</span>`;
+        row.addEventListener('click', () => {
+          const lat = parseFloat(r.lat), lng = parseFloat(r.lon);
+          currentAreaLabel = label;
+          searchResults.innerHTML = '';
+          searchInput.value = '';
+          if (currentDifficulty === 'ward'){
+            handleWardTap(lat, lng);
+          } else {
+            addPoint(lat, lng, q, PROVINCES[provinceSelect.value]?.name || '');
+            map.flyTo([lat, lng], 15, { duration: 0.8 });
+          }
+        });
+        searchResults.appendChild(row);
+      });
+    }catch(e){
+      searchResults.innerHTML = `<div class="empty-note">Lỗi tìm kiếm — kiểm tra kết nối mạng và thử lại.</div>`;
+    }
+  }
+  searchBtn.addEventListener('click', runSearch);
+  searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
+
+  // ================= SETUP: add / remove points =================
+  function makeSetupIcon(num){
+    return L.divIcon({
+      className: '',
+      html: `<div class="pin setup"><div class="num">${num}</div>${pinSVG()}</div>`,
+      iconSize: [32,32], iconAnchor: [16,28]
+    });
+  }
+
+  function addPoint(lat, lng, name, city){
+    const p = { id: nextPointId++, name: name || `Điểm ${LOCATIONS.length+1}`, city: city || (PROVINCES[provinceSelect.value]?.name || ''), lat, lng, radius: DIFFICULTY[currentDifficulty].pointRadius };
+    LOCATIONS.push(p);
+    const marker = L.marker([lat,lng], { icon: makeSetupIcon(LOCATIONS.length) }).addTo(map);
+    marker.on('click', () => removePoint(p.id));
+    setupMarkers[p.id] = marker;
+    if (!generatingFlag) roundInfo = null; // thêm điểm thủ công thì không còn là 1 vòng "chuẩn" nữa
+    renderPointsList();
+    renumberSetupMarkers();
+  }
+
+  function removePoint(id){
+    LOCATIONS = LOCATIONS.filter(p => p.id !== id);
+    if (setupMarkers[id]){ map.removeLayer(setupMarkers[id]); delete setupMarkers[id]; }
+    roundInfo = null;
+    renderPointsList();
+    renumberSetupMarkers();
+  }
+
+  function clearAllPoints(){
+    LOCATIONS.forEach(p => { if (setupMarkers[p.id]) map.removeLayer(setupMarkers[p.id]); });
+    LOCATIONS = [];
+    Object.keys(setupMarkers).forEach(k => delete setupMarkers[k]);
+    renderPointsList();
+  }
+
+  // Dò xem 1 toạ độ nằm trong phường/xã nào (dùng Nominatim reverse geocoding)
+  async function reverseGeocodeWard(lat, lng){
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&addressdetails=1&lat=${lat}&lon=${lng}`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'vi' } });
+    const data = await res.json();
+    const addr = data.address || {};
+    const wardName = addr.suburb || addr.quarter || addr.city_district || addr.village || addr.town || addr.hamlet || addr.neighbourhood || 'Khu vực đã chọn';
+    const centerLat = data.lat ? parseFloat(data.lat) : lat;
+    const centerLng = data.lon ? parseFloat(data.lon) : lng;
+    return { wardName, centerLat, centerLng };
+  }
+
+  // Trạng thái "vòng" hiện tại đang hiển thị trên bản đồ (null nếu là điểm tự đặt thủ công)
+  let roundInfo = null;
+  let generatingFlag = false;
+
+  function showRoundInfo(difficultyKey, areaLabel, round){
+    const box = document.getElementById('roundInfoBox');
+    box.style.display = 'block';
+    box.textContent = `${areaLabel} — Vòng #${round} (99 vị trí)`;
+  }
+
+  // Rải 99 vị trí quanh 1 khu vực (phường hoặc tỉnh) — seed theo khu vực + số vòng hiện
+  // tại, nên mọi người chơi chọn đúng khu vực đó, cùng vòng, sẽ thấy đúng 99 vị trí giống
+  // nhau. Vòng chỉ đổi khi có người điểm danh hết (xem hàm finish()).
+  async function generateAreaSet(difficultyKey, centerLat, centerLng, areaLabel){
+    showToast(`Đang tải dữ liệu vòng chơi cho ${areaLabel}…`, 1500);
+    const round = await getRound(difficultyKey, areaLabel);
+    const count = DIFFICULTY[difficultyKey].count;
+    const radiusKm = DIFFICULTY[difficultyKey].radiusKm;
+    const rng = hashSeed(`${difficultyKey}|${areaLabel}|round-${round}`);
+    generatingFlag = true;
+    clearAllPoints();
+    for (let i = 0; i < count; i++){
+      const angle = rng() * 2 * Math.PI;
+      const dist = radiusKm * 1000 * Math.sqrt(rng());
+      const dLat = (dist * Math.cos(angle)) / 111320;
+      const dLng = (dist * Math.sin(angle)) / (111320 * Math.cos(centerLat * Math.PI / 180));
+      addPoint(centerLat + dLat, centerLng + dLng, `Điểm bí ẩn ${i+1}`, areaLabel);
+    }
+    generatingFlag = false;
+    roundInfo = { key: difficultyKey, areaLabel, round };
+    currentAreaLabel = areaLabel;
+    map.flyTo([centerLat, centerLng], difficultyKey === 'province' ? 10 : 15, { duration: 0.9 });
+    showToast(`${areaLabel} — Vòng #${round}: đã rải 99 vị trí, dùng chung cho tất cả người chơi.`, 3600);
+    showRoundInfo(difficultyKey, areaLabel, round);
+  }
+
+  // Toàn quốc: 99 vị trí rải khắp các tỉnh (mỗi vị trí gần trung tâm 1 tỉnh ngẫu nhiên)
+  async function generateCountrySet(){
+    const areaLabel = 'Toàn quốc';
+    showToast('Đang tải dữ liệu vòng chơi toàn quốc…', 1500);
+    const round = await getRound('country', areaLabel);
+    const count = DIFFICULTY.country.count;
+    const jitterM = DIFFICULTY.country.radiusKm * 1000;
+    const rng = hashSeed(`country|${areaLabel}|round-${round}`);
+    generatingFlag = true;
+    clearAllPoints();
+    for (let i = 0; i < count; i++){
+      const prov = PROVINCES[Math.floor(rng() * PROVINCES.length)];
+      const angle = rng() * 2 * Math.PI;
+      const dist = jitterM * Math.sqrt(rng());
+      const dLat = (dist * Math.cos(angle)) / 111320;
+      const dLng = (dist * Math.sin(angle)) / (111320 * Math.cos(prov.lat * Math.PI / 180));
+      addPoint(prov.lat + dLat, prov.lng + dLng, `Điểm bí ẩn ${i+1}`, prov.name);
+    }
+    generatingFlag = false;
+    roundInfo = { key: 'country', areaLabel, round };
+    currentAreaLabel = areaLabel;
+    map.flyTo([16.6, 106.5], 5.4, { duration: 0.9 });
+    showToast(`Toàn quốc — Vòng #${round}: đã rải 99 vị trí khắp cả nước, dùng chung cho tất cả người chơi.`, 3600);
+    showRoundInfo('country', areaLabel, round);
+  }
+
+  async function handleWardTap(lat, lng){
+    showToast('Đang xác định phường/xã tại vị trí bạn chạm…', 1800);
+    try{
+      const { wardName, centerLat, centerLng } = await reverseGeocodeWard(lat, lng);
+      generateAreaSet('ward', centerLat, centerLng, wardName);
+    }catch(e){
+      showToast('Không xác định được phường/xã ở vị trí này — thử chạm chỗ khác hoặc kiểm tra kết nối mạng.', 3200);
+    }
+  }
+
+  // Cấp Thạch Anh (phường/xã): tự lấy vị trí GPS của người chơi ngay khi vào màn thiết
+  // lập, tự nhận diện phường/xã rồi rải 99 vị trí — không cần tự chọn tỉnh/tìm kiếm nữa.
+  function autoDetectWardHere(){
+    const box = document.getElementById('wardAutoBox');
+    if (!box) return;
+    if (!navigator.geolocation){
+      box.textContent = 'Trình duyệt này không hỗ trợ định vị GPS. Bấm "Dò lại vị trí" để thử lại, hoặc đổi sang cấp khác.';
+      return;
+    }
+    if (!isSecureForGPS()){
+      box.textContent = '⚠ Trang đang mở từ file (không phải https) nên không tự lấy được vị trí. Hãy tải file lên một trang https (Netlify...) rồi mở lại.';
+      return;
+    }
+    box.textContent = '📍 Đang lấy vị trí của bạn để tự động xác định phường/xã…';
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      if (currentDifficulty !== 'ward') return; // người chơi đã đổi cấp khác trong lúc chờ
+      box.textContent = 'Đã có vị trí — đang tra tên phường/xã…';
+      try{
+        const { wardName, centerLat, centerLng } = await reverseGeocodeWard(pos.coords.latitude, pos.coords.longitude);
+        await generateAreaSet('ward', centerLat, centerLng, wardName);
+        box.textContent = `✅ ${wardName} — sẵn sàng!`;
+      }catch(e){
+        box.textContent = 'Không tra được tên phường/xã (có thể do mất mạng). Bấm "Dò lại vị trí" để thử lại.';
+      }
+    }, (err) => {
+      let msg = 'Không lấy được vị trí của bạn.';
+      if (err.code === 1) msg = 'Bạn cần cho phép quyền vị trí (Location) để tự động chọn phường/xã đang đứng.';
+      else if (err.code === 2) msg = 'Thiết bị chưa xác định được vị trí — thử ra ngoài trời hoặc bật định vị (GPS) của máy.';
+      else if (err.code === 3) msg = 'Lấy vị trí quá lâu, thử lại xem sao.';
+      box.textContent = `${msg} Bấm "Dò lại vị trí" để thử lại.`;
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  }
+  document.getElementById('wardRetryBtn').addEventListener('click', () => requestLocationConsent(autoDetectWardHere));
+
+  function renumberSetupMarkers(){
+    LOCATIONS.forEach((p, i) => {
+      const m = setupMarkers[p.id];
+      if (m) m.setIcon(makeSetupIcon(i+1));
+    });
+  }
+
+  function renderPointsList(){
+    document.getElementById('pointCount').textContent = LOCATIONS.length;
+    document.getElementById('pointCountInline').textContent = LOCATIONS.length;
+    const list = document.getElementById('pointsList');
+    list.innerHTML = '';
+    if (!LOCATIONS.length){
+      list.innerHTML = `<div class="empty-note">Chưa có điểm nào — chạm bản đồ hoặc tìm địa danh ở trên để thêm.</div>`;
+    } else {
+      LOCATIONS.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'point-row';
+        row.innerHTML = `
+          <div class="badge">${i+1}</div>
+          <input class="name-in" value="${escapeHtml(p.name)}" data-id="${p.id}" />
+          <input class="radius-in" type="number" min="1" max="1000" value="${p.radius}" data-id="${p.id}" />
+          <span class="unit">m</span>
+          <button class="rm" data-id="${p.id}">✕</button>`;
+        list.appendChild(row);
+      });
+      list.querySelectorAll('.name-in').forEach(inp => {
+        inp.addEventListener('input', (e) => {
+          const p = LOCATIONS.find(x => x.id == e.target.dataset.id);
+          if (p) p.name = e.target.value;
+          roundInfo = null; // đã chỉnh tay thì không còn đúng bộ 99 điểm chuẩn của vòng nữa
+        });
+      });
+      list.querySelectorAll('.radius-in').forEach(inp => {
+        inp.addEventListener('input', (e) => {
+          const p = LOCATIONS.find(x => x.id == e.target.dataset.id);
+          if (p) p.radius = Math.max(1, parseInt(e.target.value) || 15);
+          roundInfo = null;
+        });
+      });
+      list.querySelectorAll('.rm').forEach(btn => {
+        btn.addEventListener('click', (e) => removePoint(parseInt(e.target.dataset.id)));
+      });
+    }
+    const has = LOCATIONS.length > 0;
+    document.getElementById('startRealBtn').disabled = !has;
+    document.getElementById('startDemoBtn').disabled = !has;
+  }
+
+  map.on('click', (e) => {
+    if (mode !== 'setup') return;
+    if (currentDifficulty === 'ward'){
+      handleWardTap(e.latlng.lat, e.latlng.lng);
+      return;
+    }
+    // Trung bình/Khó: chọn tỉnh (hoặc bấm nút toàn quốc) để rải theo vòng — chạm bản đồ ở
+    // các độ khó này chỉ thêm 1 điểm tự chọn ngoài hệ thống vòng (không bắt buộc dùng).
+    addPoint(e.latlng.lat, e.latlng.lng, `Điểm ${LOCATIONS.length+1}`, PROVINCES[provinceSelect.value]?.name || '');
+  });
+
+  document.getElementById('genAreaBtn').addEventListener('click', () => {
+    generateCountrySet();
+  });
+
+  document.getElementById('presetBtn').addEventListener('click', () => {
+    PRESET_POINTS.forEach(p => addPoint(p.lat, p.lng, p.name, p.city));
+    map.flyTo([16.6, 106.5], 5.4, { duration: 0.8 });
+    roundInfo = null;
+    showToast('Đã thêm 6 địa danh mẫu — bạn có thể sửa tên/bán kính hoặc thêm bớt tuỳ ý.');
+  });
+
+  // ================= Chuyển từ Setup sang Game =================
+  function enterGameMode(useDemo){
+    mode = 'game';
+    gameDifficulty = currentDifficulty;
+    gameRoundInfo = roundInfo; // chốt lại thông tin vòng tại thời điểm bắt đầu chơi
+    gemUnits = 0;
+    document.getElementById('scoreDisplay').textContent = '0 kara';
+    LOCATIONS.forEach(p => { if (setupMarkers[p.id]){ map.removeLayer(setupMarkers[p.id]); } });
+
+    document.getElementById('setupSheet').style.display = 'none';
+    document.getElementById('gameSheet').style.display = 'flex';
+    document.getElementById('gameStats').style.display = 'flex';
+    document.getElementById('topSub').textContent = `${DIFFICULTY[gameDifficulty].gemIcon} ${DIFFICULTY[gameDifficulty].unitName}`;
+
+    LOCATIONS.forEach((loc, idx) => {
+      loc.idx = idx;
+      const marker = L.marker([loc.lat, loc.lng], { icon: makeIcon(loc, false, false) }).addTo(map);
+      marker.on('click', () => openTarget(idx));
+      markers[idx] = marker;
+      radiusCircles[idx] = L.circle([loc.lat, loc.lng], { radius: loc.radius, color: '#B8862E', weight: 1.4, dashArray: '4,5', fillColor: '#B8862E', fillOpacity: 0.08 }).addTo(map);
+    });
+
+    renderChecklist();
+    updateProgress();
+    map.flyTo([LOCATIONS[0].lat, LOCATIONS[0].lng], 12, { duration: 0.8 });
+
+    if (useDemo) startDemoMode(); else startRealGPS();
+  }
+
+  document.getElementById('startRealBtn').addEventListener('click', () => {
+    document.getElementById('pointsModalOverlay').classList.remove('show');
+    requestLocationConsent(() => enterGameMode(false));
+  });
+  document.getElementById('startDemoBtn').addEventListener('click', () => {
+    document.getElementById('pointsModalOverlay').classList.remove('show');
+    enterGameMode(true);
+  });
+  document.getElementById('openPointsBtn').addEventListener('click', () => {
+    document.getElementById('pointsModalOverlay').classList.add('show');
+  });
+  document.getElementById('closePointsModal').addEventListener('click', () => {
+    document.getElementById('pointsModalOverlay').classList.remove('show');
+  });
+
+  // ================= GAME LOGIC (giống bản trước, hoạt động trên LOCATIONS đã chọn) =================
+  function makeIcon(loc, checked, near){
+    return L.divIcon({
+      className: '',
+      html: `<div class="pin ${checked ? 'checked' : 'unchecked'} ${near ? 'near' : ''}">${pinSVG()}<div class="stamp-pop" id="pop-${loc.idx}"></div></div>`,
+      iconSize: [32,32], iconAnchor: [16,28]
+    });
+  }
+
+  function startTimerIfNeeded(){
+    if (state.startTime) return;
+    state.startTime = Date.now();
+    state.timerInterval = setInterval(() => { document.getElementById('timerDisplay').textContent = fmtTime(Date.now()-state.startTime); }, 1000);
+  }
+
+  function playBeep(){
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type='sine'; o.frequency.value=880;
+      g.gain.setValueAtTime(0.001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.35);
+      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.4);
+    }catch(e){}
+  }
+
+  function distanceTo(loc){ if (!state.myPos) return null; return haversine(state.myPos.lat, state.myPos.lng, loc.lat, loc.lng); }
+
+  function updateAllDistances(){
+    LOCATIONS.forEach((loc, idx) => {
+      const d = distanceTo(loc), checked = state.checked.has(idx);
+      const near = !checked && d != null && d <= loc.radius;
+      markers[idx].setIcon(makeIcon(loc, checked, near));
+    });
+    renderChecklist();
+    if (state.selected != null) refreshTargetCard();
+  }
+
+  function bestUnchecked(){
+    let best=null, bestD=Infinity;
+    LOCATIONS.forEach((loc, idx) => {
+      if (state.checked.has(idx)) return;
+      const d = distanceTo(loc);
+      if (d != null && d < bestD){ bestD=d; best=idx; }
+    });
+    return best;
+  }
+
+  function openTarget(idx){ state.selected=idx; document.getElementById('targetCard').classList.add('show'); flyTo(LOCATIONS[idx]); refreshTargetCard(); }
+  function closeTarget(){ state.selected=null; document.getElementById('targetCard').classList.remove('show'); }
+
+  function refreshTargetCard(){
+    const idx = state.selected; if (idx==null) return;
+    const loc = LOCATIONS[idx], done = state.checked.has(idx);
+    document.getElementById('tcName').textContent = loc.name;
+    document.getElementById('tcCity').textContent = loc.city;
+    const d = distanceTo(loc);
+    const bar = document.getElementById('tcBar'), feel = document.getElementById('tcFeel'), distEl = document.getElementById('tcDist'), btn = document.getElementById('tcBtn');
+    const miniIcon = document.getElementById('tcMiniIcon'), miniDist = document.getElementById('tcMiniDist');
+    if (done){
+      bar.style.width='100%'; feel.textContent='Đã điểm danh'; distEl.textContent='Hoàn thành'; btn.textContent='Đã điểm danh ✓'; btn.classList.remove('ready'); btn.disabled=true;
+      miniIcon.textContent='✅'; miniDist.textContent='Xong';
+      return;
+    }
+    if (d==null){
+      bar.style.width='0%'; feel.textContent='Chưa có GPS'; distEl.textContent='— m'; btn.textContent='Đang chờ tín hiệu GPS…'; btn.classList.remove('ready'); btn.disabled=true;
+      miniIcon.textContent='📍'; miniDist.textContent='—';
+      return;
+    }
+    const FAR_CAP_M = 3000;
+    const pct = Math.max(0, Math.min(100, 100 - (d/FAR_CAP_M)*100));
+    bar.style.width = `${pct}%`; distEl.textContent = `Còn ${fmtDist(d)}`;
+    miniDist.textContent = fmtDist(d);
+    const ready = debugSkipRadius || d <= loc.radius;
+    if (ready){ feel.textContent = debugSkipRadius ? 'Trong phạm vi! (test: bỏ qua khoảng cách)' : 'Trong phạm vi!'; btn.textContent='Điểm danh ngay'; btn.classList.add('ready'); btn.disabled=false; miniIcon.textContent='🎯'; }
+    else if (d < loc.radius*3){ feel.textContent='Rất gần rồi 🔥'; btn.textContent='Đến gần hơn để điểm danh'; btn.classList.remove('ready'); btn.disabled=true; miniIcon.textContent='🔥'; }
+    else if (d < loc.radius*10){ feel.textContent='Đang ấm dần lên'; btn.textContent='Đến gần hơn để điểm danh'; btn.classList.remove('ready'); btn.disabled=true; miniIcon.textContent='📍'; }
+    else { feel.textContent='Còn khá xa'; btn.textContent='Đến gần hơn để điểm danh'; btn.classList.remove('ready'); btn.disabled=true; miniIcon.textContent='📍'; }
+  }
+
+  function attemptCheckIn(){
+    const idx = state.selected; if (idx==null || state.checked.has(idx)) return;
+    const loc = LOCATIONS[idx], d = distanceTo(loc);
+    if (!debugSkipRadius && (d==null || d>loc.radius)) return;
+    checkIn(idx);
+  }
+
+  function checkIn(idx){
+    if (state.finished || state.checked.has(idx)) return;
+    state.checked.add(idx);
+    const loc = LOCATIONS[idx];
+    markers[idx].setIcon(makeIcon(loc, true, false));
+    map.removeLayer(radiusCircles[idx]);
+    const popEl = document.getElementById(`pop-${idx}`);
+    if (popEl){
+      popEl.innerHTML = `<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="#3E6E5E" stroke-width="6"/><path d="M30 52 L44 66 L72 34" fill="none" stroke="#3E6E5E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      popEl.classList.add('play');
+    }
+    playBeep();
+    if (navigator.vibrate) navigator.vibrate([40,30,60]);
+    const diff = DIFFICULTY[gameDifficulty];
+    gemUnits += GEM_UNITS_PER_CHECKIN;
+    const karatNow = gemUnits / diff.karatRate;
+    document.getElementById('scoreDisplay').textContent = `${karatNow.toFixed(2)} kara`;
+    showToast(`Đã điểm danh: ${loc.name} ✓  +${GEM_UNITS_PER_CHECKIN} đơn vị ${diff.gemIcon} ${diff.unitName} (≈ ${(GEM_UNITS_PER_CHECKIN/diff.karatRate).toFixed(3)} kara kim cương)`);
+    refreshTargetCard(); renderChecklist(); updateProgress();
+    if (state.checked.size === LOCATIONS.length) finish();
+  }
+
+  function flyTo(loc){ map.flyTo([loc.lat, loc.lng], Math.max(map.getZoom(),13), { duration:0.8 }); }
+
+  function renderChecklist(){
+    const container = document.getElementById('checklist');
+    container.innerHTML = '';
+    const sorted = LOCATIONS.map((loc, idx) => ({ loc, idx, d: distanceTo(loc) })).sort((a,b) => (a.d??Infinity)-(b.d??Infinity));
+    sorted.forEach(({loc, idx, d}) => {
+      const done = state.checked.has(idx), near = !done && d!=null && d<=loc.radius;
+      const item = document.createElement('div');
+      item.className = `item ${done?'done':''} ${near?'near':''}`;
+      item.innerHTML = `<div class="badge">${done?'✓':idx+1}</div><div class="info"><div class="name">${escapeHtml(loc.name)}</div><div class="hint">${escapeHtml(loc.city)}</div></div><div class="dist">${done?'Xong':fmtDist(d)}</div>`;
+      item.addEventListener('click', () => openTarget(idx));
+      container.appendChild(item);
+    });
+  }
+
+  function updateProgress(){ document.getElementById('progressDisplay').textContent = `${state.checked.size}/${LOCATIONS.length}`; }
+
+  function finish(){
+    state.finished = true; clearInterval(state.timerInterval);
+    const timeSec = Math.floor((Date.now()-state.startTime)/1000);
+    document.getElementById('finalTime').textContent = fmtTime(timeSec*1000);
+    const diff = DIFFICULTY[gameDifficulty];
+    const karat = gemUnits / diff.karatRate;
+    document.getElementById('finalUnits').textContent = gemUnits;
+    document.getElementById('finalGemName').textContent = `${diff.gemIcon} ${diff.unitName}`;
+    document.getElementById('finalScore').textContent = karat.toFixed(2);
+    const noteEl = document.getElementById('roundAdvanceNote');
+    if (gameRoundInfo){
+      const nextRound = gameRoundInfo.round + 1;
+      advanceRound(gameRoundInfo.key, gameRoundInfo.areaLabel, gameRoundInfo.round);
+      noteEl.style.display = 'block';
+      noteEl.textContent = syncOnline
+        ? `${gameRoundInfo.areaLabel} đã xong Vòng #${gameRoundInfo.round}! Đã đồng bộ — mọi người chơi khác chọn khu vực này giờ sẽ thấy ngay Vòng #${nextRound} với 99 vị trí mới.`
+        : `${gameRoundInfo.areaLabel} đã xong Vòng #${gameRoundInfo.round}! Lần sau bạn chọn lại khu vực này (trên máy này) sẽ là Vòng #${nextRound}.`;
+    } else {
+      noteEl.style.display = 'none';
+    }
+
+    // Cập nhật thống kê + huy hiệu (lưu cục bộ)
+    const stats = loadStats();
+    stats.totalRounds += 1;
+    stats.roundsByTier[gameDifficulty] += 1;
+    stats.totalUnitsByTier[gameDifficulty] += gemUnits;
+    if (stats.bestTimeSec[gameDifficulty] == null || timeSec < stats.bestTimeSec[gameDifficulty]) stats.bestTimeSec[gameDifficulty] = timeSec;
+    saveStats(stats);
+    const newly = checkAndAwardBadges(stats, timeSec, gameDifficulty);
+    renderBadgeCountBadge();
+    const newBadgesBox = document.getElementById('newBadgesBox');
+    if (newly.length){
+      newBadgesBox.style.display = 'block';
+      newBadgesBox.innerHTML = `<div class="hint-text" style="background:rgba(184,134,46,0.18); font-weight:600;">🎉 Huy hiệu mới: ${newly.map(id => { const b = BADGES.find(x=>x.id===id); return escapeHtml(`${b.icon} ${b.title}`); }).join(', ')}</div>`;
+    } else {
+      newBadgesBox.style.display = 'none';
+    }
+
+    // Chuẩn bị dữ liệu cho nút Chia sẻ + Gửi bảng xếp hạng
+    const areaLabel = (gameRoundInfo && gameRoundInfo.areaLabel) || currentAreaLabel || diff.label;
+    lastResult = { areaLabel, tier: gameDifficulty, karat, gemUnits, unitName: diff.unitName, gemIcon: diff.gemIcon, timeSec };
+    const lbBox = document.getElementById('leaderboardSubmitBox');
+    const statusEl = document.getElementById('submitScoreStatus');
+    statusEl.style.display = 'none';
+    if (syncOnline){
+      lbBox.style.display = 'block';
+      try{ document.getElementById('nicknameInput').value = localStorage.getItem('ngocrong_nickname') || ''; }catch(e){}
+    } else {
+      lbBox.style.display = 'none';
+    }
+
+    closeTarget();
+    setTimeout(() => document.getElementById('winOverlay').classList.add('show'), 500);
+  }
+
+  function ensureMeMarker(latlng){
+    if (!meMarker){ meMarker = L.marker(latlng, { icon: L.divIcon({ className:'', html:'<div class="me-dot"></div>', iconSize:[18,18], iconAnchor:[9,9] }), zIndexOffset:1000 }).addTo(map); }
+    else meMarker.setLatLng(latlng);
+  }
+
+  function onPosition(pos){
+    state.myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+    document.getElementById('gpsDot').classList.add('live');
+    document.getElementById('gpsLabel').textContent = 'GPS đang hoạt động';
+    ensureMeMarker([state.myPos.lat, state.myPos.lng]);
+    startTimerIfNeeded(); updateAllDistances();
+    updateDebugGpsInfo();
+    if (state.selected==null){ const b=bestUnchecked(); if (b!=null) openTarget(b); }
+  }
+  function isSecureForGPS(){
+    // Geolocation chỉ hoạt động trên https:// hoặc localhost. Mở file trực tiếp từ
+    // Downloads (content://, file://) hoặc trang http:// sẽ bị trình duyệt chặn.
+    return location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  }
+  function onPositionError(err){
+    document.getElementById('gpsLabel').textContent = 'Không lấy được GPS';
+    let msg = 'Không truy cập được vị trí thật.';
+    if (err && err.code === 1) msg = 'Bạn đã từ chối quyền truy cập vị trí — hãy cho phép vị trí trong cài đặt trình duyệt rồi thử lại.';
+    else if (err && err.code === 2) msg = 'Thiết bị không xác định được vị trí lúc này — thử ra ngoài trời hoặc bật định vị (Location) của máy.';
+    else if (err && err.code === 3) msg = 'Tín hiệu GPS phản hồi quá chậm — thử lại sau vài giây.';
+    if (!isSecureForGPS()) msg = 'Trang đang mở từ file/Downloads (không phải https) nên trình duyệt chặn GPS. Hãy tải file này lên một trang lưu trữ (vd. Netlify) rồi mở bằng đường link https, hoặc dùng chế độ mô phỏng bên dưới.';
+    showToast(msg, 4200);
+  }
+  function startRealGPS(){
+    if (!navigator.geolocation){ showToast('Trình duyệt không hỗ trợ GPS.'); return; }
+    if (!isSecureForGPS()){
+      onPositionError(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(onPosition, onPositionError, { enableHighAccuracy:true, timeout:8000 });
+    state.watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, { enableHighAccuracy:true, maximumAge:2000, timeout:10000 });
+  }
+  function startDemoMode(){
+    state.demoMode = true;
+    document.getElementById('gpsLabel').textContent = 'Chế độ mô phỏng — chạm bản đồ';
+    document.getElementById('gpsDot').classList.add('live');
+    showToast('Chế độ mô phỏng: chạm vào bản đồ để giả lập vị trí của bạn.', 3200);
+    map.on('click', demoClickHandler);
+  }
+  function demoClickHandler(e){
+    if (mode !== 'game' || !state.demoMode) return;
+    state.myPos = { lat: e.latlng.lat, lng: e.latlng.lng, accuracy: 5 };
+    ensureMeMarker(e.latlng);
+    startTimerIfNeeded(); updateAllDistances();
+    updateDebugGpsInfo();
+    if (state.selected==null){ const b=bestUnchecked(); if (b!=null) openTarget(b); }
+  }
+
+  // ================= Sheets: collapse toggles =================
+  function wireSheet(sheetId, handleId, toggleId){
+    const sheet=document.getElementById(sheetId), handle=document.getElementById(handleId), toggle=document.getElementById(toggleId);
+    handle.addEventListener('click', () => {
+      sheet.classList.toggle('collapsed');
+      toggle.textContent = sheet.classList.contains('collapsed') ? 'Mở rộng' : 'Thu gọn';
+    });
+  }
+  wireSheet('setupSheet','setupHandle','setupToggle');
+  wireSheet('gameSheet','gameHandle','gameToggle');
+
+  document.getElementById('tcClose').addEventListener('click', closeTarget);
+  document.getElementById('tcMin').addEventListener('click', () => {
+    document.getElementById('targetCard').classList.add('minimized');
+  });
+  document.getElementById('tcMini').addEventListener('click', () => {
+    document.getElementById('targetCard').classList.remove('minimized');
+  });
+  document.getElementById('tcBtn').addEventListener('click', attemptCheckIn);
+  document.getElementById('gpsBadge').addEventListener('click', () => {
+    if (state.myPos){
+      showToast(`${state.demoMode ? 'Mô phỏng' : 'GPS thật'}: ${state.myPos.lat.toFixed(6)}, ${state.myPos.lng.toFixed(6)} — sai số ±${Math.round(state.myPos.accuracy || 0)}m`, 3200);
+    } else {
+      showToast(state.demoMode ? 'Đang ở chế độ mô phỏng — chạm bản đồ để di chuyển.' : 'Đang dùng GPS thật của thiết bị.');
+    }
+  });
+
+  document.getElementById('playAgainBtn').addEventListener('click', () => {
+    location.reload();
+  });
+
+  if (typeof isSecureForGPS === 'function' && !isSecureForGPS()){
+    document.getElementById('insecureWarning').style.display = 'block';
+  }
+  // Phát hiện trình duyệt nhúng của Messenger/Facebook/Zalo/Instagram — các trình duyệt
+  // này thường chặn hoặc làm GPS bị treo tới khi hết giờ (timeout).
+  (function checkInAppBrowser(){
+    const ua = navigator.userAgent || '';
+    const isInApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Zalo|MessengerLiteForiOS|MessengerForiOS/i.test(ua);
+    if (isInApp){
+      document.getElementById('inAppBrowserWarning').style.display = 'block';
+    }
+  })();
+  renderPointsList();
+
+  // Trạng thái ban đầu: cấp mặc định là Thạch Anh (phường/xã) → tự dò vị trí luôn
+  document.getElementById('provinceBlock').style.display = 'none';
+  document.getElementById('searchBlock').style.display = 'none';
+  document.getElementById('wardAutoBlock').style.display = 'block';
+  requestLocationConsent(autoDetectWardHere);
+</script>
+</body>
+</html>
