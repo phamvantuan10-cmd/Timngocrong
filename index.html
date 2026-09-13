@@ -1473,5 +1473,14 @@
   document.getElementById('wardAutoBlock').style.display = 'block';
   requestLocationConsent(autoDetectWardHere);
 </script>
+<script>
+  // Đăng ký service worker để Chrome cho phép "Cài đặt" app thật sự (không chỉ tạo lối
+  // tắt mở trong tab trình duyệt). Không cache gì offline — chỉ để thoả điều kiện của Chrome.
+  if ('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js').catch(() => {});
+    });
+  }
+</script>
 </body>
 </html>
